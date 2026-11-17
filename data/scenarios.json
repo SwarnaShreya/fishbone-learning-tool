@@ -14,7 +14,7 @@
       "id": "next_steps",
       "text": "Vehicle assessors do not inform customers about the next steps.",
       "correct_bone": "People",
-      "hint": "Focus on communication by the assessor. The lecture places this under People."
+      "hint": "Focus on communication by the assessor. This example places this under People."
     },
     {
       "id": "biased_assessor",
@@ -26,13 +26,13 @@
       "id": "value_mismatch",
       "text": "The dealership assessor estimates residual value lower than the value shown later in the official letter.",
       "correct_bone": "People",
-      "hint": "The lecture groups this discrepancy with the assessor-related causes under People."
+      "hint": "This example groups this discrepancy with the assessor-related causes under People."
     },
     {
       "id": "wear_information",
       "text": "Customers receive no information about signs of use and decreased vehicle value.",
       "correct_bone": "Procedure",
-      "hint": "Think about information that should be communicated during the process. The lecture places this under Procedure."
+      "hint": "Think about information that should be communicated during the process. This example places this under Procedure."
     },
     {
       "id": "value_explanation",
@@ -44,7 +44,7 @@
       "id": "slow_evaluation",
       "text": "Evaluation of damage takes too long.",
       "correct_bone": "Systems",
-      "hint": "The lecture groups this processing delay under Systems."
+      "hint": "This example groups this processing delay under Systems."
     },
     {
       "id": "mail_fax",
@@ -56,7 +56,7 @@
       "id": "protocol_errors",
       "text": "The return protocol contains mistakes.",
       "correct_bone": "Systems",
-      "hint": "The lecture places errors in the return protocol under Systems."
+      "hint": "This example places errors in the return protocol under Systems."
     },
     {
       "id": "strict_goodwill",
@@ -68,7 +68,7 @@
       "id": "late_protocol",
       "text": "The return protocol, including damage information, is sent to customers too late.",
       "correct_bone": "Policy",
-      "hint": "Although timing could fit other categories, the lecture places this under Policy."
+      "hint": "Although timing could fit other categories, this example places this under Policy."
     },
     {
       "id": "competitor_vouchers",
@@ -80,13 +80,13 @@
       "id": "unclear_acronyms",
       "text": "Customers do not understand the acronyms in the return protocol.",
       "correct_bone": "Equipment",
-      "hint": "The lecture places this under Equipment. Communication or document design could also be reasonable discussion points."
+      "hint": "This example places this under Equipment. Communication or document design could also be reasonable discussion points."
     },
     {
       "id": "incomplete_documents",
       "text": "Documents are incomplete when sent to SF.",
       "correct_bone": "Equipment",
-      "hint": "Follow the lecture example: this document-related cause appears under Equipment."
+      "hint": "Follow this example: this document-related cause appears under Equipment."
     }
   ],
   "sub_causes": [
