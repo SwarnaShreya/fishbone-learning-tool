@@ -21,6 +21,14 @@ BONES = scenario["bones"]
 LOOKUP = {c["id"]: c for c in ALL_CAUSES}
 LABELS = {c["id"]: f"C{i}" for i, c in enumerate(ALL_CAUSES, 1)}
 EFFECT = scenario["effect"]
+# Use accepted placements to keep the reference diagram balanced.
+DISPLAY_BONES = {c["id"]: c["correct_bone"] for c in ALL_CAUSES}
+for cid, bone in {"slow_evaluation": "Systems", "protocol_errors": "Systems",
+                  "unclear_acronyms": "People"}.items():
+    if cid in LOOKUP and bone in LOOKUP[cid].get("accepted_bones", [LOOKUP[cid]["correct_bone"]]):
+        DISPLAY_BONES[cid] = bone
+DIAGRAM_BONES = ["People", "Systems", "Equipment", "Procedure", "Policy", "Environment"]
+
 DEFINITIONS = {
     "People": "People's knowledge, actions, communication, and perceived impartiality.",
     "Procedure": "The steps and methods used to carry out the work.",
@@ -46,7 +54,7 @@ for bone in BONES:
     }
 for c in ALL_CAUSES:
     PARTS[c["id"]] = {
-        "heading": f"{LABELS[c['id']]} | {c['correct_bone']} | Possible cause",
+        "heading": f"{LABELS[c['id']]} | {DISPLAY_BONES[c['id']]} | Possible cause",
         "text": c["text"],
         "detail": c["hint"] + " Accepted categories: " + ", ".join(c.get("accepted_bones", [c["correct_bone"]])) + ".",
     }
@@ -64,19 +72,11 @@ for s in SUBCAUSES:
 
 
 def fishbone(selected_ids=None, votes=None):
-    """Space each category by its cause count; voting never moves causes."""
+    """Compact symmetric bones, with fixed positions as votes change."""
     mini = votes is not None
     chosen = set(LOOKUP if selected_ids is None else selected_ids)
-    groups = {
-        bone: [c for c in ALL_CAUSES if c["correct_bone"] == bone and c["id"] in chosen]
-        for bone in BONES
-    }
-    upper_count = max([len(groups[b]) for b in BONES[:3]] + [0])
-    lower_count = max([len(groups[b]) for b in BONES[3:]] + [0])
-    upper_height = max(3.2, (upper_count + 1) * 0.95)
-    lower_height = max(3.2, (lower_count + 1) * 0.95)
     fig = go.Figure()
-    fig.add_shape(type="line", x0=0, y0=0, x1=17.5, y1=0,
+    fig.add_shape(type="line", x0=0, y0=0, x1=14, y1=0,
                   line=dict(color="#CBD5E1", width=3))
 
     def node(node_id, x, y, text, color, size=17, position="middle right"):
@@ -93,48 +93,42 @@ def fishbone(selected_ids=None, votes=None):
             hoverinfo="text", showlegend=False,
         ))
 
-    positions = [(3.8, 1), (8.8, 1), (13.8, 1),
-                 (3.8, -1), (8.8, -1), (13.8, -1)]
+    positions = [(3, 1), (7, 1), (11, 1), (3, -1), (7, -1), (11, -1)]
     cause_positions = {}
-    for bone, (base, direction) in zip(BONES, positions):
-        bone_height = upper_height if direction > 0 else lower_height
-        tip_y = direction * bone_height
-        fig.add_shape(type="line", x0=base, y0=0, x1=base-2.5, y1=tip_y,
+    for bone, (base, direction) in zip(DIAGRAM_BONES, positions):
+        fig.add_shape(type="line", x0=base, y0=0, x1=base-2, y1=direction*3,
                       line=dict(color="#38BDF8", width=2))
-        node(f"bone_{bone}", base-2.5, tip_y, bone, "#0284C7", 14,
+        node(f"bone_{bone}", base-2, direction*3, bone, "#0284C7", 14,
              "top center" if direction > 0 else "bottom center")
-        members = groups[bone]
+        members = [c for c in ALL_CAUSES if DISPLAY_BONES[c["id"]] == bone]
         for i, c in enumerate(members):
-            fraction = (i + 1) / (len(members) + 1)
-            x = base - 2.5 * fraction
-            y = direction * bone_height * fraction
-            # A straight column of circles keeps labels out of the next branch.
-            cx = base + 0.4
+            fraction = (i+1) / (len(members)+1)
+            x, y = base-2*fraction, direction*3*fraction
+            if c["id"] not in chosen:
+                continue
+            cx = x + 0.9
             cause_positions[c["id"]] = (cx, y)
             fig.add_shape(type="line", x0=x, y0=y, x1=cx, y1=y,
                           line=dict(color="#5EEAD4", width=1.5))
             count = votes.get(c["id"], 0) if mini else 0
             color = ("#14B8A6" if count else "#64748B") if mini else "#0D9488"
-            size = (10 if count == 0 else 14 + 9 * math.sqrt(count)) if mini else 18
+            size = (10 if count == 0 else 14 + 8*math.sqrt(count)) if mini else 18
             label = f" {LABELS[c['id']]}: {count}" if mini else " " + LABELS[c["id"]]
             node(c["id"], cx, y, label, color, size)
 
     for sub in SUBCAUSES:
         if sub["parent_id"] in cause_positions:
             px, py = cause_positions[sub["parent_id"]]
-            sx, sy = px + 1.6, py + (0.55 if py > 0 else -0.55)
+            sx, sy = px+1.0, py+(0.55 if py > 0 else -0.55)
             fig.add_shape(type="line", x0=px, y0=py, x1=sx, y1=sy,
                           line=dict(color="#C084FC", width=2))
             node(sub["id"], sx, sy, " " + SUBLABELS[sub["id"]], "#9333EA", 13)
-
-    node("effect", 17.5, 0, "Customer<br>dissatisfaction", "#F97316", 25, "bottom center")
-    height = max(470 if mini else 650,
-                 (upper_height + lower_height + 2) * (44 if mini else 53))
+    node("effect", 14, 0, "Customer<br>dissatisfaction", "#F97316", 25, "bottom center")
     fig.update_layout(
-        height=int(height),
-        margin=dict(l=12, r=20, t=40, b=40),
-        xaxis=dict(visible=False, range=[-0.2, 19.0], fixedrange=True),
-        yaxis=dict(visible=False, range=[-lower_height-1, upper_height+1], fixedrange=True),
+        height=490 if mini else 570,
+        margin=dict(l=15, r=20, t=35, b=35),
+        xaxis=dict(visible=False, range=[-0.2, 15.5], fixedrange=True),
+        yaxis=dict(visible=False, range=[-4, 4], fixedrange=True),
         plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
         font=dict(color="#E2E8F0"), clickmode="event+select", dragmode=False,
     )
@@ -279,7 +273,7 @@ with right:
                  format_func=lambda key: PARTS[key]["heading"], key="detail_part")
     part_panel(st.session_state.detail_part)
 with st.expander("Read all causes and their categories"):
-    st.table([{"ID": LABELS[c["id"]], "Display category": c["correct_bone"], "Accepted categories": ", ".join(c.get("accepted_bones", [c["correct_bone"]])), "Possible cause": c["text"]}
+    st.table([{"ID": LABELS[c["id"]], "Display category": DISPLAY_BONES[c["id"]], "Accepted categories": ", ".join(c.get("accepted_bones", [c["correct_bone"]])), "Possible cause": c["text"]}
               for c in ALL_CAUSES])
     for sub in SUBCAUSES:
         parent = LOOKUP[sub["parent_id"]]
@@ -337,7 +331,7 @@ else:
     vote_columns = st.columns(len(PRACTICE))
     for column, cause in zip(vote_columns, PRACTICE):
         with column:
-            st.markdown(f"**{LABELS[cause['id']]} | {cause['correct_bone']}**")
+            st.markdown(f"**{LABELS[cause['id']]} | {DISPLAY_BONES[cause['id']]}**")
             st.write(cause["text"])
             votes[cause["id"]] = st.number_input("Voting points", min_value=0, max_value=4,
                                                   value=0, step=1, key=f"vote_{cause['id']}")
