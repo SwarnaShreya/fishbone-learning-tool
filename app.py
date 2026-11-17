@@ -392,8 +392,7 @@ mail_column, electronic_column = st.columns(2)
 with mail_column:
     st.subheader("Mail or fax")
     mail_total = st.slider("Reports reviewed", 10, 400, key="sim_mail_total")
-    st.session_state.sim_mail_late = min(st.session_state.sim_mail_late, mail_total)
-    mail_late = st.slider("Late reports", 0, mail_total, key="sim_mail_late")
+    mail_late = st.slider("Late reports", 0, 400, key="sim_mail_late")
 with electronic_column:
     st.subheader("Electronic")
     electronic_total = st.slider("Reports reviewed", 10, 400, key="sim_electronic_total")
