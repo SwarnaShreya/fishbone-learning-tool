@@ -165,13 +165,76 @@ with st.expander("Key terms"):
     st.write("**Return protocol:** the return report documenting vehicle condition and damage.")
     st.write("**SF:** an abbreviation appearing in the lecture; its full meaning is not specified on the slide.")
 
-st.markdown("### How the activity works")
-st.write(
-    "1. Read the diagram: identify the effect, categories, causes, and smaller branches.\n"
-    "2. Sort five causes into the categories used in the lecture example.\n"
-    "3. Spend four points to prioritize causes for investigation.\n"
-    "4. Change simulated data to see how observations can support or challenge a suspected cause."
-)
+st.markdown("""
+<style>
+.activity-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+    margin: 16px 0 24px;
+}
+.activity-card {
+    background: #171717;
+    border: 1px solid #3A2525;
+    border-top: 4px solid #EF4444;
+    border-radius: 12px;
+    padding: 20px;
+}
+.activity-title {
+    color: #F87171;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.3;
+    margin-bottom: 12px;
+}
+.activity-description {
+    color: #D1D5DB;
+    font-size: 15px;
+    font-weight: 400;
+    line-height: 1.6;
+}
+@media (max-width: 900px) {
+    .activity-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+@media (max-width: 550px) {
+    .activity-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<h3>How the activity works</h3>
+
+<div class="activity-grid">
+    <div class="activity-card">
+        <div class="activity-title">1. Read the diagram</div>
+        <div class="activity-description">
+            Identify the effect, categories, causes, and smaller branches.
+        </div>
+    </div>
+    <div class="activity-card">
+        <div class="activity-title">2. Sort five causes</div>
+        <div class="activity-description">
+            Match each cause to its category in the example.
+        </div>
+    </div>
+    <div class="activity-card">
+        <div class="activity-title">3. Prioritize causes</div>
+        <div class="activity-description">
+            Spend four points on the causes you want to investigate.
+        </div>
+    </div>
+    <div class="activity-card">
+        <div class="activity-title">4. Test with data</div>
+        <div class="activity-description">
+            Change the numbers to see whether the pattern supports
+            or challenges a suspected cause.
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 st.caption(
     "Based on Dr. Mi Kyong Newsom's Analyze: Root Cause Analysis slides, pages 22-25 and 38-40. "
     "Hints and category definitions are supplementary guidance. Some category placements can be debated."
