@@ -396,9 +396,13 @@ with mail_column:
 with electronic_column:
     st.subheader("Electronic")
     electronic_total = st.slider("Reports reviewed", 10, 400, key="sim_electronic_total")
-    st.session_state.sim_electronic_late = min(st.session_state.sim_electronic_late, electronic_total)
-    electronic_late = st.slider("Late reports", 0, electronic_total, key="sim_electronic_late")
-st.caption("Late counts are limited to the number reviewed; lowering a total also caps its late count.")
+    electronic_late = st.slider("Late reports", 0, 400, key="sim_electronic_late")
+if mail_late > mail_total or electronic_late > electronic_total:
+    st.error(
+        "Late reports cannot exceed reports reviewed. "
+        "Reduce the late count or increase the reviewed count."
+    )
+    st.stop()
 mail_rate = 100 * mail_late / mail_total
 electronic_rate = 100 * electronic_late / electronic_total
 gap = mail_rate - electronic_rate
