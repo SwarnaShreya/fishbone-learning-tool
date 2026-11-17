@@ -208,7 +208,7 @@ with st.expander("Read all causes and their lecture categories"):
 
 st.divider()
 st.header("Level 1: Sort five causes")
-st.write("Choose the category used in the lecture. A wrong answer reveals the lecture answer first, then a hint.")
+st.write("Choose the category used in the lecture.")
 st.button("Start a new practice round", on_click=reset_practice)
 columns = st.columns(len(PRACTICE))
 correct_count = 0
