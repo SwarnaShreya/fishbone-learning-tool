@@ -87,7 +87,7 @@ def fishbone(selected_ids=None, votes=None):
             textposition=position, textfont=dict(size=11 if mini else 13, color="#E2E8F0"),
             marker=dict(size=size, color=color, line=dict(width=1, color="#CBD5E1")),
             selected=dict(marker=dict(opacity=1)),
-            unselected=dict(marker=dict(opacity=1), textfont=dict(color="#E2E8F0")),
+            unselected=dict(marker=dict(opacity=0.2), textfont=dict(color="#64748B")),
             customdata=[node_id],
             hovertext=[html.escape(info["heading"] + extra) + "<br>" + html.escape(info["text"])],
             hoverinfo="text", showlegend=False,
