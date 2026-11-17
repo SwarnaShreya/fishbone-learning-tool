@@ -27,7 +27,7 @@ DEFINITIONS = {
     "Systems": "The systems and information channels supporting the process.",
     "Policy": "Rules and guidelines governing decisions and exceptions.",
     "Environment": "External or surrounding conditions affecting the process.",
-    "Equipment": "Usually tools and devices. This lecture example also places document-related issues here.",
+    "Equipment": "Usually tools and devices. This example also places document-related issues here.",
 }
 SUBCAUSES = [s for s in scenario.get("sub_causes", []) if s["parent_id"] in LOOKUP]
 SUBLABELS = {s["id"]: f"S{i}" for i, s in enumerate(SUBCAUSES, 1)}
@@ -58,7 +58,7 @@ for s in SUBCAUSES:
         "detail": (
             f"Connected to {LABELS[parent['id']]}: {parent['text']} "
             "It belongs to that cause's branch, not directly to the main spine. "
-            "The lecture shows this connection; confirm its intended causal direction with the professor."
+            "The source diagram shows this connection; confirm its intended causal direction with the professor."
         ),
     }
 
@@ -163,7 +163,7 @@ st.write(
 with st.expander("Key terms"):
     st.write("**Residual value:** the estimated value of the vehicle at the end of the agreement.")
     st.write("**Return protocol:** the return report documenting vehicle condition and damage.")
-    st.write("**SF:** an abbreviation appearing in the lecture; its full meaning is not specified on the slide.")
+    st.write("**SF:** an abbreviation in the source diagram; its full meaning is not specified.")
 
 st.markdown("""
 <style>
@@ -247,21 +247,21 @@ st.write(
 st.caption("C numbers are stable reference labels, not rankings or scores. S labels identify smaller branches.")
 left, right = st.columns([3, 1])
 with left:
-    event = st.plotly_chart(fishbone(), key="lecture_fishbone_v2", width="stretch",
+    event = st.plotly_chart(fishbone(), key="reference_fishbone_v2", width="stretch",
                            theme=None, on_select="rerun", selection_mode="points",
                            config={"displayModeBar": False})
 with right:
     st.subheader("Diagram details")
     clicked = selected_id(event)
-    if clicked and clicked != st.session_state.get("last_lecture_click"):
+    if clicked and clicked != st.session_state.get("last_reference_click"):
         st.session_state.detail_part = clicked
-        st.session_state.last_lecture_click = clicked
+        st.session_state.last_reference_click = clicked
     if st.session_state.get("detail_part") not in PARTS:
         st.session_state.detail_part = "effect"
     st.selectbox("Choose a part, or click its circle", list(PARTS),
                  format_func=lambda key: PARTS[key]["heading"], key="detail_part")
     part_panel(st.session_state.detail_part)
-with st.expander("Read all causes and their lecture categories"):
+with st.expander("Read all causes and their categories"):
     st.table([{"ID": LABELS[c["id"]], "Category": c["correct_bone"], "Possible cause": c["text"]}
               for c in ALL_CAUSES])
     for sub in SUBCAUSES:
@@ -271,7 +271,7 @@ with st.expander("Read all causes and their lecture categories"):
 
 st.divider()
 st.header("Level 1: Sort five causes")
-st.write("Choose the category used in the lecture.")
+st.write("Choose the category used in this example.")
 st.button("Start a new practice round", on_click=reset_practice)
 columns = st.columns(len(PRACTICE))
 correct_count = 0
@@ -298,7 +298,7 @@ for i, (column, cause) in enumerate(zip(columns, PRACTICE), 1):
                 correct_count += 1
                 st.success("Correct: " + cause["correct_bone"])
             else:
-                st.error("Incorrect for this example. Lecture answer: " + cause["correct_bone"])
+                st.error("Incorrect for this example. Answer: " + cause["correct_bone"])
                 st.info("Hint: " + cause["hint"])
                 st.caption("Change your selection and check again.")
 
@@ -367,7 +367,7 @@ else:
 
 st.divider()
 st.header("Does the data support the cause?")
-st.caption("Fictional learning simulation, separate from the lecture case and your voting results.")
+st.caption("Fictional learning simulation, separate from the BMW example and your voting results.")
 st.write(
     "**Possible cause:** Reports sent by mail or fax may arrive late more often than electronic reports. "
     "Change the observed counts below and watch the rates and comparison change."
