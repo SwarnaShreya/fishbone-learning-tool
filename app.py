@@ -27,7 +27,7 @@ DEFINITIONS = {
     "Systems": "The systems and information channels supporting the process.",
     "Policy": "Rules and guidelines governing decisions and exceptions.",
     "Environment": "External or surrounding conditions affecting the process.",
-    "Equipment": "Usually tools and devices. This example also places document-related issues here.",
+    "Equipment": "Physical tools and devices. Use this category when the wording identifies a tool or device problem; none of the current statements explicitly does so.",
 }
 SUBCAUSES = [s for s in scenario.get("sub_causes", []) if s["parent_id"] in LOOKUP]
 SUBLABELS = {s["id"]: f"S{i}" for i, s in enumerate(SUBCAUSES, 1)}
@@ -48,7 +48,7 @@ for c in ALL_CAUSES:
     PARTS[c["id"]] = {
         "heading": f"{LABELS[c['id']]} | {c['correct_bone']} | Possible cause",
         "text": c["text"],
-        "detail": c["hint"],
+        "detail": c["hint"] + " Accepted categories: " + ", ".join(c.get("accepted_bones", [c["correct_bone"]])) + ".",
     }
 for s in SUBCAUSES:
     parent = LOOKUP[s["parent_id"]]
@@ -110,7 +110,7 @@ def fishbone(selected_ids=None, votes=None):
     for s in SUBCAUSES:
         if s["parent_id"] in cause_positions:
             px, py = cause_positions[s["parent_id"]]
-            sx, sy = px+0.7, py-0.8
+            sx, sy = px+0.8, py+(0.6 if py > 0 else -0.6)
             fig.add_shape(type="line", x0=px, y0=py, x1=sx, y1=sy,
                           line=dict(color="#C084FC", width=2))
             node(s["id"], sx, sy, SUBLABELS[s["id"]], "#9333EA", 13)
@@ -235,6 +235,12 @@ st.markdown("""
     </div>
 </div>
 """, unsafe_allow_html=True)
+st.info(
+    "This is an adapted practice version. Category choices follow the wording of each statement, "
+    "so some placements differ from the original example. Where a statement can reasonably fit "
+    "more than one category, the activity accepts those alternatives. The reference diagram uses "
+    "one display category per cause."
+)
 st.header("Understand the fishbone")
 st.write(
     "The orange head is the effect. Blue bones are categories. Teal circles are possible causes. "
@@ -258,7 +264,7 @@ with right:
                  format_func=lambda key: PARTS[key]["heading"], key="detail_part")
     part_panel(st.session_state.detail_part)
 with st.expander("Read all causes and their categories"):
-    st.table([{"ID": LABELS[c["id"]], "Category": c["correct_bone"], "Possible cause": c["text"]}
+    st.table([{"ID": LABELS[c["id"]], "Display category": c["correct_bone"], "Accepted categories": ", ".join(c.get("accepted_bones", [c["correct_bone"]])), "Possible cause": c["text"]}
               for c in ALL_CAUSES])
     for sub in SUBCAUSES:
         parent = LOOKUP[sub["parent_id"]]
@@ -267,7 +273,7 @@ with st.expander("Read all causes and their categories"):
 
 st.divider()
 st.header("Level 1: Sort five causes")
-st.write("Choose the category used in this example.")
+st.write("Choose a category that fits the wording. Some causes have more than one accepted category.")
 st.button("Start a new practice round", on_click=reset_practice)
 columns = st.columns(len(PRACTICE))
 correct_count = 0
@@ -282,19 +288,20 @@ for i, (column, cause) in enumerate(zip(columns, PRACTICE), 1):
             if answer == "Choose...":
                 st.warning("Choose a category first.")
             else:
-                st.session_state[feedback_key] = {"choice": answer, "correct": answer == cause["correct_bone"]}
+                st.session_state[feedback_key] = {"choice": answer, "correct": answer in cause.get("accepted_bones", [cause["correct_bone"]])}
         result = st.session_state.get(feedback_key)
         if result and result["choice"] == answer:
-            is_correct = result["correct"]
+            is_correct = answer in cause.get("accepted_bones", [cause["correct_bone"]])
             color = "#16A34A" if is_correct else "#DC2626"
             st.markdown(f'''<style>
             .st-key-{answer_key} [data-baseweb="select"] > div {{border: 2px solid {color} !important;}}
             </style>''', unsafe_allow_html=True)
             if is_correct:
                 correct_count += 1
-                st.success("Correct: " + cause["correct_bone"])
+                st.success("Correct: " + answer)
+                st.write(cause["hint"])
             else:
-                st.error("Incorrect for this example. Answer: " + cause["correct_bone"])
+                st.error("Incorrect for this example. Accepted answer(s): " + ", ".join(cause.get("accepted_bones", [cause["correct_bone"]])))
                 st.info("Hint: " + cause["hint"])
                 st.caption("Change your selection and check again.")
 
