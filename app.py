@@ -235,10 +235,6 @@ st.markdown("""
     </div>
 </div>
 """, unsafe_allow_html=True)
-st.caption(
-    "Based on Dr. Mi Kyong Newsom's Analyze: Root Cause Analysis slides, pages 22-25 and 38-40. "
-    "Hints and category definitions are supplementary guidance. Some category placements can be debated."
-)
 st.header("Understand the fishbone")
 st.write(
     "The orange head is the effect. Blue bones are categories. Teal circles are possible causes. "
