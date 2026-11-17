@@ -1,512 +1,377 @@
+"""Fishbone learning app. Requires the existing data/scenarios.json file."""
+import html
 import json
+import math
 import random
 from pathlib import Path
 
 import plotly.graph_objects as go
 import streamlit as st
 
-st.set_page_config(
-    page_title="Fishbone Learning Tool",
-    page_icon="🐟",
-    layout="wide",
-)
-
+st.set_page_config(page_title="Fishbone Learning Tool", layout="wide")
 ROOT = Path(__file__).resolve().parent
+try:
+    scenario = json.loads((ROOT / "data" / "scenarios.json").read_text(encoding="utf-8"))
+except (OSError, json.JSONDecodeError):
+    st.error("Cannot read data/scenarios.json. Keep that file inside the data folder.")
+    st.stop()
 
-with open(ROOT / "data" / "scenarios.json", encoding="utf-8") as file:
-    scenario = json.load(file)
-
-st.title("Fishbone Learning Tool")
-st.subheader(scenario["title"])
-st.info(f"Effect: {scenario['effect']}")
-
-st.caption(
-    "BMW category placements follow the lecture example. "
-    "Hints and category definitions are draft learning guidance."
-)
-
-definitions = {
+ALL_CAUSES = scenario["causes"]
+BONES = scenario["bones"]
+LOOKUP = {c["id"]: c for c in ALL_CAUSES}
+LABELS = {c["id"]: f"C{i}" for i, c in enumerate(ALL_CAUSES, 1)}
+EFFECT = scenario["effect"]
+DEFINITIONS = {
     "People": "People's knowledge, actions, communication, and perceived impartiality.",
     "Procedure": "The steps and methods used to carry out the work.",
     "Systems": "The systems and information channels supporting the process.",
     "Policy": "Rules and guidelines governing decisions and exceptions.",
     "Environment": "External or surrounding conditions affecting the process.",
-    "Equipment": (
-        "Often physical tools and devices. In this lecture example, "
-        "the category also contains document-related issues."
-    ),
+    "Equipment": "Usually tools and devices. This lecture example also places document-related issues here.",
 }
-
-causes = scenario["causes"]
-cause_lookup = {cause["id"]: cause for cause in causes}
-
-# Remember the shuffled order during this browser session.
-cause_ids = list(cause_lookup)
-
-saved_order = st.session_state.get("card_order", [])
-
-if (
-    len(saved_order) != 5
-    or not set(saved_order).issubset(cause_ids)
-):
-    st.session_state.card_order = random.sample(cause_ids, 5)
-
-# Build the diagram.
-fig = go.Figure()
-node_info = {}
-cause_positions = {}
-
-fig.add_shape(
-    type="line",
-    x0=0, y0=0, x1=14, y1=0,
-    line=dict(color="#CBD5E1", width=4),
-)
-
-
-def add_node(node_id, x, y, label, color, title, explanation):
-    node_info[node_id] = {
-        "title": title,
-        "explanation": explanation,
+SUBCAUSES = [s for s in scenario.get("sub_causes", []) if s["parent_id"] in LOOKUP]
+SUBLABELS = {s["id"]: f"S{i}" for i, s in enumerate(SUBCAUSES, 1)}
+PARTS = {
+    "effect": {
+        "heading": "Effect: the problem being investigated",
+        "text": EFFECT,
+        "detail": "This is the outcome we want to explain, not a cause. The causes on the bones are possible explanations for customer dissatisfaction.",
+    }
+}
+for bone in BONES:
+    PARTS[f"bone_{bone}"] = {
+        "heading": f"{bone}: main category",
+        "text": DEFINITIONS.get(bone, "A category for organizing possible causes."),
+        "detail": "A category groups related causes; it is not itself a confirmed root cause.",
+    }
+for c in ALL_CAUSES:
+    PARTS[c["id"]] = {
+        "heading": f"{LABELS[c['id']]} | {c['correct_bone']} | Possible cause",
+        "text": c["text"],
+        "detail": c["hint"],
+    }
+for s in SUBCAUSES:
+    parent = LOOKUP[s["parent_id"]]
+    PARTS[s["id"]] = {
+        "heading": f"{SUBLABELS[s['id']]} | {parent['correct_bone']} | Smaller branch",
+        "text": s["text"],
+        "detail": (
+            f"Connected to {LABELS[parent['id']]}: {parent['text']} "
+            "It belongs to that cause's branch, not directly to the main spine. "
+            "The lecture shows this connection; confirm its intended causal direction with the professor."
+        ),
     }
 
-    fig.add_trace(go.Scatter(
-        x=[x],
-        y=[y],
-        mode="markers+text",
-        marker=dict(size=19, color=color),
-        text=[label],
-        textposition="top center",
-        textfont=dict(size=12, color="#E2E8F0"),
-        customdata=[node_id],
-        hovertext=[title],
-        hoverinfo="text",
-        showlegend=False,
-    ))
 
+def fishbone(selected_ids=None, votes=None):
+    """Fixed positions: vote counts change emphasis, never category assignment."""
+    mini = votes is not None
+    chosen = set(LOOKUP if selected_ids is None else selected_ids)
+    fig = go.Figure()
+    fig.add_shape(type="line", x0=0, y0=0, x1=14, y1=0,
+                  line=dict(color="#CBD5E1", width=3))
 
-positions = [
-    (3, 1),
-    (7, 1),
-    (11, 1),
-    (3, -1),
-    (7, -1),
-    (11, -1),
-]
+    def node(node_id, x, y, text, color, size=17, position="top center"):
+        info = PARTS[node_id]
+        extra = f" | {votes.get(node_id, 0)} voting points" if mini and node_id in LOOKUP else ""
+        fig.add_trace(go.Scatter(
+            x=[x], y=[y], mode="markers+text", text=[text],
+            textposition=position, textfont=dict(size=11 if mini else 13),
+            marker=dict(size=size, color=color, line=dict(width=1, color="#CBD5E1")),
+            customdata=[node_id],
+            hovertext=[html.escape(info["heading"] + extra) + "<br>" + html.escape(info["text"])],
+            hoverinfo="text", showlegend=False,
+        ))
 
-for bone, (base_x, direction) in zip(scenario["bones"], positions):
-    tip_x = base_x - 2
-    tip_y = direction * 3
+    positions = [(3, 1), (7, 1), (11, 1), (3, -1), (7, -1), (11, -1)]
+    cause_positions = {}
+    for bone, (base, direction) in zip(BONES, positions):
+        fig.add_shape(type="line", x0=base, y0=0, x1=base-2, y1=direction*3,
+                      line=dict(color="#38BDF8", width=2))
+        node(f"bone_{bone}", base-2, direction*3, bone, "#0284C7", 14,
+             "top center" if direction > 0 else "bottom center")
+        members = [c for c in ALL_CAUSES if c["correct_bone"] == bone]
+        for i, c in enumerate(members):
+            # Coordinates use all members so the layout is stable in both views.
+            fraction = (i+1) / (len(members)+1)
+            x, y = base-2*fraction, direction*3*fraction
+            if c["id"] not in chosen:
+                continue
+            cx = x + 0.9
+            cause_positions[c["id"]] = (cx, y)
+            fig.add_shape(type="line", x0=x, y0=y, x1=cx, y1=y,
+                          line=dict(color="#5EEAD4", width=1.5))
+            count = votes.get(c["id"], 0) if mini else 0
+            color = ("#14B8A6" if count else "#64748B") if mini else "#0D9488"
+            size = (10 if count == 0 else 16 + 10*math.sqrt(count)) if mini else 18
+            label = f"{LABELS[c['id']]}: {count}" if mini else LABELS[c["id"]]
+            node(c["id"], cx, y, label, color, size)
 
-    fig.add_shape(
-        type="line",
-        x0=base_x, y0=0,
-        x1=tip_x, y1=tip_y,
-        line=dict(color="#0284C7", width=3),
+    for s in SUBCAUSES:
+        if s["parent_id"] in cause_positions:
+            px, py = cause_positions[s["parent_id"]]
+            sx, sy = px+0.7, py-0.8
+            fig.add_shape(type="line", x0=px, y0=py, x1=sx, y1=sy,
+                          line=dict(color="#C084FC", width=2))
+            node(s["id"], sx, sy, SUBLABELS[s["id"]], "#9333EA", 13)
+    node("effect", 14, 0, "Customer<br>dissatisfaction", "#F97316", 25, "bottom center")
+    fig.update_layout(
+        height=410 if mini else 570,
+        margin=dict(l=15, r=20, t=35, b=35),
+        xaxis=dict(visible=False, range=[-0.2, 15.5], fixedrange=True),
+        yaxis=dict(visible=False, range=[-4, 4], fixedrange=True),
+        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#E2E8F0"), clickmode="event+select", dragmode=False,
     )
+    return fig
 
-    add_node(
-        f"bone_{bone}",
-        tip_x, tip_y,
-        bone, "#0284C7",
-        bone,
-        definitions[bone],
-    )
 
-    members = [
-        cause for cause in causes
-        if cause["correct_bone"] == bone
-    ]
-
-    for index, cause in enumerate(members):
-        fraction = (index + 1) / (len(members) + 1)
-        junction_x = base_x - 2 * fraction
-        junction_y = direction * 3 * fraction
-        node_x = junction_x + 1.0
-
-        fig.add_shape(
-            type="line",
-            x0=junction_x, y0=junction_y,
-            x1=node_x, y1=junction_y,
-            line=dict(color="#0D9488", width=2),
-        )
-
-        number = causes.index(cause) + 1
-        cause_positions[cause["id"]] = (node_x, junction_y)
-
-        add_node(
-            cause["id"],
-            node_x, junction_y,
-            f"C{number}", "#0D9488",
-            cause["text"],
-            f"Lecture category: {bone}. {cause['hint']}",
-        )
-
-# Draw the smaller branch using the relationship stored in JSON.
-for sub in scenario.get("sub_causes", []):
-    parent_position = cause_positions.get(sub["parent_id"])
-
-    if parent_position:
-        parent_x, parent_y = parent_position
-        sub_x = parent_x + 0.7
-        sub_y = parent_y - 0.8
-
-        fig.add_shape(
-            type="line",
-            x0=parent_x, y0=parent_y,
-            x1=sub_x, y1=sub_y,
-            line=dict(color="#9333EA", width=2),
-        )
-
-        add_node(
-            sub["id"],
-            sub_x, sub_y,
-            "Sub-cause", "#9333EA",
-            sub["text"],
-            sub["explanation"],
-        )
-
-add_node(
-    "effect",
-    14, 0,
-    "Effect", "#F97316",
-    scenario["effect"],
-    "The effect is the problem or outcome we want to understand.",
-)
-
-fig.update_layout(
-    height=570,
-    margin=dict(l=20, r=20, t=35, b=35),
-    xaxis=dict(visible=False, range=[-0.2, 15]),
-    yaxis=dict(visible=False, range=[-4, 4]),
-    plot_bgcolor="rgba(0,0,0,0)",
-    paper_bgcolor="rgba(0,0,0,0)",
-    clickmode="event+select",
-    dragmode=False,
-)
-
-diagram, panel = st.columns([3, 1])
-
-with diagram:
-    st.write("Click a circle to explore the diagram.")
-
-    event = st.plotly_chart(
-        fig,
-        use_container_width=True,
-        key="bmw_diagram",
-        on_select="rerun",
-        selection_mode="points",
-    )
-
-    st.caption(
-        "Blue: categories · Teal: causes · "
-        "Purple: smaller branch · Orange: effect"
-    )
-
-with panel:
-    st.subheader("Explore")
-
+def selected_id(event):
     points = event.selection.points
+    if not points:
+        return None
+    value = points[0].get("customdata")
+    return value[0] if isinstance(value, (list, tuple)) else value
 
-    if points:
-        node_id = points[0].get("customdata")
 
-        if isinstance(node_id, list):
-            node_id = node_id[0]
+def part_panel(part_id):
+    info = PARTS.get(part_id, PARTS["effect"])
+    st.markdown(f"**{info['heading']}**")
+    st.write(info["text"])
+    st.write(info["detail"])
 
-        info = node_info.get(node_id)
 
-        if info:
-            st.markdown(f"**{info['title']}**")
-            st.write(info["explanation"])
-    else:
-        st.info("Click a category, cause, smaller branch, or effect.")
+def reset_practice():
+    for key in list(st.session_state):
+        if key.startswith(("answer_", "feedback_", "vote_")) or key == "card_order":
+            del st.session_state[key]
 
-st.caption(
-    "Fishbone diagrams organize possible causes. "
-    "Data is needed to establish which are real root causes."
+
+saved = st.session_state.get("card_order", [])
+if len(saved) != min(5, len(LOOKUP)) or not set(saved).issubset(LOOKUP):
+    st.session_state.card_order = random.sample(list(LOOKUP), min(5, len(LOOKUP)))
+PRACTICE = [LOOKUP[cid] for cid in st.session_state.card_order]
+
+st.title("Fishbone Learning Tool")
+st.subheader(scenario["title"])
+st.info(f"Problem / effect: {EFFECT}")
+st.write(
+    "When a customer returns a financed vehicle, information about its condition, "
+    "wear charges, and residual value can affect customer satisfaction. This fishbone "
+    "organizes possible reasons for dissatisfaction in that return process."
 )
+with st.expander("Key terms"):
+    st.write("**Residual value:** the estimated value of the vehicle at the end of the agreement.")
+    st.write("**Return protocol:** the return report documenting vehicle condition and damage.")
+    st.write("**SF:** an abbreviation appearing in the lecture; its full meaning is not specified on the slide.")
+
+st.markdown("### How the activity works")
+st.write(
+    "1. Read the diagram: identify the effect, categories, causes, and smaller branches.\n"
+    "2. Sort five causes into the categories used in the lecture example.\n"
+    "3. Spend four points to prioritize causes for investigation.\n"
+    "4. Change simulated data to see how observations can support or challenge a suspected cause."
+)
+st.caption(
+    "Based on Dr. Mi Kyong Newsom's Analyze: Root Cause Analysis slides, pages 22-25 and 38-40. "
+    "Hints and category definitions are supplementary guidance. Some category placements can be debated."
+)
+st.header("Understand the fishbone")
+st.write(
+    "The orange head is the effect. Blue bones are categories. Teal circles are possible causes. "
+    "Purple circles are smaller branches attached to a cause. Click a circle for its category and explanation."
+)
+st.caption("C numbers are stable reference labels, not rankings or scores. S labels identify smaller branches.")
+left, right = st.columns([3, 1])
+with left:
+    event = st.plotly_chart(fishbone(), key="lecture_fishbone_v2", width="stretch",
+                           theme=None, on_select="rerun", selection_mode="points",
+                           config={"displayModeBar": False})
+with right:
+    st.subheader("Diagram details")
+    clicked = selected_id(event)
+    if clicked and clicked != st.session_state.get("last_lecture_click"):
+        st.session_state.detail_part = clicked
+        st.session_state.last_lecture_click = clicked
+    if st.session_state.get("detail_part") not in PARTS:
+        st.session_state.detail_part = "effect"
+    st.selectbox("Choose a part, or click its circle", list(PARTS),
+                 format_func=lambda key: PARTS[key]["heading"], key="detail_part")
+    part_panel(st.session_state.detail_part)
+with st.expander("Read all causes and their lecture categories"):
+    st.table([{"ID": LABELS[c["id"]], "Category": c["correct_bone"], "Possible cause": c["text"]}
+              for c in ALL_CAUSES])
+    for sub in SUBCAUSES:
+        parent = LOOKUP[sub["parent_id"]]
+        st.write(f"**{SUBLABELS[sub['id']]} -> {LABELS[parent['id']]} -> {parent['correct_bone']}**")
+        part_panel(sub["id"])
 
 st.divider()
-st.header("Level 1: Sort the causes")
-st.write(
-    "Match each cause to its category in the lecture example. "
-    "You can explore the diagram above for help."
-)
-
-# Use the same five causes for sorting and voting.
-causes = [
-    cause_lookup[cause_id]
-    for cause_id in st.session_state.card_order
-]
-
+st.header("Level 1: Sort five causes")
+st.write("Choose the category used in the lecture. A wrong answer reveals the lecture answer first, then a hint.")
+st.button("Start a new practice round", on_click=reset_practice)
+columns = st.columns(len(PRACTICE))
 correct_count = 0
-question_columns = st.columns(5)
-
-for card_number, cause_id in enumerate(st.session_state.card_order, start=1):
-    cause = cause_lookup[cause_id]
-    widget_key = f"answer_{cause_id}"
-    feedback_key = f"feedback_{cause_id}"
-
-    with question_columns[card_number - 1].container(border=True):
-        st.markdown(f"**{card_number}. {cause['text']}**")
-
-        choice = st.selectbox(
-            "Choose a category",
-            ["Choose…"] + scenario["bones"],
-            key=widget_key,
-        )
-
-        if st.button("Check answer", key=f"check_{cause_id}"):
-            if choice == "Choose…":
+for i, (column, cause) in enumerate(zip(columns, PRACTICE), 1):
+    cid = cause["id"]
+    answer_key, feedback_key = f"answer_{cid}", f"feedback_{cid}"
+    with column.container(border=True):
+        st.markdown(f"**Question {i} | {LABELS[cid]}**")
+        st.write(cause["text"])
+        answer = st.selectbox("Category", ["Choose..."] + BONES, key=answer_key)
+        if st.button("Check answer", key=f"check_{cid}"):
+            if answer == "Choose...":
                 st.warning("Choose a category first.")
             else:
-                st.session_state[feedback_key] = {
-                    "choice": choice,
-                    "correct": choice == cause["correct_bone"],
-                }
-
-        feedback = st.session_state.get(feedback_key)
-
-        if feedback and feedback["choice"] == choice:
-            is_correct = feedback["correct"]
-            color = "#15803D" if is_correct else "#DC2626"
-
-            st.markdown(
-                f"""
-                <style>
-                .st-key-{widget_key} [data-baseweb="select"] > div {{
-                    border: 2px solid {color} !important;
-                }}
-                </style>
-                """,
-                unsafe_allow_html=True,
-            )
-
+                st.session_state[feedback_key] = {"choice": answer, "correct": answer == cause["correct_bone"]}
+        result = st.session_state.get(feedback_key)
+        if result and result["choice"] == answer:
+            is_correct = result["correct"]
+            color = "#16A34A" if is_correct else "#DC2626"
+            st.markdown(f'''<style>
+            .st-key-{answer_key} [data-baseweb="select"] > div {{border: 2px solid {color} !important;}}
+            </style>''', unsafe_allow_html=True)
             if is_correct:
                 correct_count += 1
-                st.success("Correct!")
-                st.write(cause["hint"])
+                st.success("Correct: " + cause["correct_bone"])
             else:
-                st.error(
-                    f"Lecture answer: {cause['correct_bone']}."
-                )
-                st.info(f"Hint: {cause['hint']}")
-                st.write("Change your selection and try again.")
-                st.divider()
-st.header("Level 2: Prioritize with four voting points")
+                st.error("Incorrect for this example. Lecture answer: " + cause["correct_bone"])
+                st.info("Hint: " + cause["hint"])
+                st.caption("Change your selection and check again.")
 
-voting_causes = [
-    cause_lookup[cause_id]
-    for cause_id in st.session_state.card_order
-]
-
-if correct_count < len(voting_causes):
-    st.info("Complete all five sorting questions correctly to unlock voting.")
-else:
-    st.write(
-        "Spend exactly 4 points on the causes you want to investigate. "
-        "You can give more than one point to a cause."
-    )
-
-    votes = {}
-    vote_columns = st.columns(len(voting_causes))
-
-    for column, cause in zip(vote_columns, voting_causes):
-        with column:
-            votes[cause["id"]] = st.number_input(
-                cause["text"],
-                min_value=0,
-                max_value=4,
-                value=0,
-                step=1,
-                key=f"vote_{cause['id']}",
-            )
-
-    total = sum(votes.values())
-    st.metric("Points allocated", f"{total} / 4")
-
-    if total < 4:
-        st.info(f"You have {4 - total} points left.")
-    elif total > 4:
-        st.error(f"Remove {total - 4} points.")
-
-    if total == 4:
-        ranked = sorted(
-            [
-                cause for cause in voting_causes
-                if votes[cause["id"]] > 0
-            ],
-            key=lambda cause: votes[cause["id"]],
-            reverse=True,
-        )
-
-        st.subheader("Your voting results")
-
-        st.table([
-            {
-                "Cause": cause["text"],
-                "Points": votes[cause["id"]],
-                "Share of votes": f"{votes[cause['id']] / 4:.0%}",
-            }
-            for cause in ranked
-        ])
-
-        cutoff = votes[ranked[min(3, len(ranked)) - 1]["id"]]
-        shortlist = [
-            cause for cause in ranked
-            if votes[cause["id"]] >= cutoff
-        ]
-
-        st.write("**Priorities for investigation:**")
-        for cause in shortlist:
-            st.write(f"• {cause['text']}")
-
-        if len(shortlist) > 3:
-            st.caption("All causes tied at the third-place cutoff are included.")
-        elif len(shortlist) < 3:
-            st.caption("Only causes receiving points are included.")
-
-        st.info(
-            "These are your individual priorities. A team would combine "
-            "participants' votes. Votes do not prove a root cause—"
-            "the next step is verification with data."
-        )
+st.progress(correct_count / len(PRACTICE))
+st.write(f"{correct_count} of {len(PRACTICE)} causes correctly placed and checked.")
 
 st.divider()
-st.caption("Fictional learning simulation — not BMW company data.")
-
+st.header("Level 2: Prioritize with four voting points")
 st.write(
-    "**Possible cause:** Reports sent by mail or fax may arrive late "
-    "more often than electronic reports. Change the numbers to explore."
+    "Voting asks what to investigate first; there is no single correct allocation. "
+    "Give more points to a cause you think deserves attention. For a test, try 2, 1, 1, 0, 0."
 )
+if correct_count < len(PRACTICE):
+    st.info(f"Complete all {len(PRACTICE)} sorting questions correctly to unlock voting.")
+else:
+    st.caption("One participant has four points. A classroom team would combine all participants' votes.")
+    votes = {}
+    vote_columns = st.columns(len(PRACTICE))
+    for column, cause in zip(vote_columns, PRACTICE):
+        with column:
+            st.markdown(f"**{LABELS[cause['id']]} | {cause['correct_bone']}**")
+            st.write(cause["text"])
+            votes[cause["id"]] = st.number_input("Voting points", min_value=0, max_value=4,
+                                                  value=0, step=1, key=f"vote_{cause['id']}")
+    total = sum(votes.values())
+    st.metric("Points allocated", f"{total} / 4")
+    if total < 4:
+        st.info(f"{4-total} points remain. The diagram below updates while you allocate them.")
+    elif total > 4:
+        st.error(f"Remove {total-4} points. The diagram shows a draft until the total is four.")
+    else:
+        st.success("Four points allocated. Your priorities are ready.")
+
+    results_column, diagram_column = st.columns([1.15, 1])
+    with results_column:
+        st.subheader("Your voting results" if total == 4 else "Draft voting results")
+        ranked = sorted(PRACTICE, key=lambda c: votes[c["id"]], reverse=True)
+        st.table([{
+            "Cause": LABELS[c["id"]] + ": " + c["text"],
+            "Points": votes[c["id"]],
+            "Share of four-point budget": f"{votes[c['id']]/4:.0%}",
+        } for c in ranked])
+        if total == 4:
+            positive = [c for c in ranked if votes[c["id"]] > 0]
+            cutoff = votes[positive[min(3, len(positive))-1]["id"]]
+            shortlist = [c for c in positive if votes[c["id"]] >= cutoff]
+            st.markdown("**Priorities for investigation**")
+            for c in shortlist:
+                st.write(f"- {LABELS[c['id']]}: {c['text']}")
+            if len(shortlist) > 3:
+                st.caption("A tie at the third-place cutoff includes all tied causes; the team can discuss how to proceed.")
+            elif len(shortlist) < 3:
+                st.caption("Fewer than three causes received votes. Only those receiving votes are shortlisted.")
+    with diagram_column:
+        st.subheader("Priorities for investigation")
+        live_event = st.plotly_chart(fishbone([c["id"] for c in PRACTICE], votes),
+                                    key="live_vote_fishbone", width="stretch", theme=None,
+                                    on_select="rerun", selection_mode="points",
+                                    config={"displayModeBar": False})
+        st.caption("Larger cause circles mean more votes. Grey means zero votes. Equal votes have equal emphasis.")
+        st.caption("Cause positions and categories stay fixed. Purple smaller branches are context and receive no separate votes.")
+        live_clicked = selected_id(live_event)
+        if live_clicked:
+            part_panel(live_clicked)
+    st.info("Votes prioritize investigation; they do not confirm root causes. Next, use observations and appropriate statistical testing.")
+
+st.divider()
+st.header("Does the data support the cause?")
+st.caption("Fictional learning simulation, separate from the lecture case and your voting results.")
+st.write(
+    "**Possible cause:** Reports sent by mail or fax may arrive late more often than electronic reports. "
+    "Change the observed counts below and watch the rates and comparison change."
+)
+
+
+def set_simulation(values):
+    for key, value in zip(("sim_mail_total", "sim_mail_late", "sim_electronic_total", "sim_electronic_late"), values):
+        st.session_state[key] = value
+
+
+preset_columns = st.columns(3)
+preset_columns[0].button("Starting example", on_click=set_simulation, args=((40, 12, 40, 4),))
+preset_columns[1].button("Equal rates, different counts", on_click=set_simulation, args=((40, 12, 80, 24),))
+preset_columns[2].button("Reverse the pattern", on_click=set_simulation, args=((40, 4, 40, 12),))
+for key, default in {"sim_mail_total": 40, "sim_mail_late": 12,
+                     "sim_electronic_total": 40, "sim_electronic_late": 4}.items():
+    if key not in st.session_state:
+        st.session_state[key] = default
 
 mail_column, electronic_column = st.columns(2)
-
 with mail_column:
     st.subheader("Mail or fax")
-
-    mail_total = st.slider(
-        "Reports reviewed",
-        min_value=10,
-        max_value=200,
-        value=40,
-        key="sim_mail_total",
-    )
-
-    mail_late = st.slider(
-        "Late reports",
-        min_value=0,
-        max_value=200,
-        value=12,
-        key="sim_mail_late",
-    )
-
+    mail_total = st.slider("Reports reviewed", 10, 400, key="sim_mail_total")
+    st.session_state.sim_mail_late = min(st.session_state.sim_mail_late, mail_total)
+    mail_late = st.slider("Late reports", 0, mail_total, key="sim_mail_late")
 with electronic_column:
     st.subheader("Electronic")
-
-    electronic_total = st.slider(
-        "Reports reviewed",
-        min_value=10,
-        max_value=200,
-        value=40,
-        key="sim_electronic_total",
-    )
-
-    electronic_late = st.slider(
-        "Late reports",
-        min_value=0,
-        max_value=200,
-        value=4,
-        key="sim_electronic_late",
-    )
-
-valid_data = (
-    mail_late <= mail_total
-    and electronic_late <= electronic_total
+    electronic_total = st.slider("Reports reviewed", 10, 400, key="sim_electronic_total")
+    st.session_state.sim_electronic_late = min(st.session_state.sim_electronic_late, electronic_total)
+    electronic_late = st.slider("Late reports", 0, electronic_total, key="sim_electronic_late")
+st.caption("Late counts are limited to the number reviewed; lowering a total also caps its late count.")
+mail_rate = 100 * mail_late / mail_total
+electronic_rate = 100 * electronic_late / electronic_total
+gap = mail_rate - electronic_rate
+first, second, third = st.columns(3)
+first.metric("Mail / fax late rate", f"{mail_rate:.1f}%")
+second.metric("Electronic late rate", f"{electronic_rate:.1f}%")
+third.metric("Mail / fax minus electronic", f"{gap:+.1f} pp")
+st.caption("pp means percentage points: the difference between two percentages.")
+comparison = go.Figure(go.Bar(
+    x=["Mail or fax", "Electronic"], y=[mail_rate, electronic_rate],
+    marker_color=["#F97316", "#38BDF8"],
+    text=[f"{mail_rate:.1f}%", f"{electronic_rate:.1f}%"], textposition="auto",
+))
+comparison.update_layout(
+    height=340, margin=dict(t=35, b=20), title="Percentage of reports arriving late",
+    yaxis=dict(title="Late reports (%)", range=[0, 100]),
+    plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
 )
-
-if not valid_data:
-    st.error(
-        "Late reports cannot exceed reports reviewed. "
-        "Lower the late count or increase the total."
-    )
+st.plotly_chart(comparison, key="simulation_comparison", width="stretch")
+if abs(gap) < 0.000001:
+    st.info("Both groups have the same observed late rate. These counts show no difference between delivery methods.")
+elif gap > 0:
+    st.info(f"The mail/fax late rate is {gap:.1f} percentage points higher. This pattern is consistent with the suspected cause, but does not establish it.")
 else:
-    mail_rate = mail_late / mail_total * 100
-    electronic_rate = electronic_late / electronic_total * 100
-    gap = mail_rate - electronic_rate
-
-    first, second, third = st.columns(3)
-
-    first.metric("Mail / fax late rate", f"{mail_rate:.1f}%")
-    second.metric("Electronic late rate", f"{electronic_rate:.1f}%")
-    third.metric("Mail / fax minus electronic", f"{gap:+.1f} pp")
-
-    comparison = go.Figure(go.Bar(
-        x=["Mail or fax", "Electronic"],
-        y=[mail_rate, electronic_rate],
-        marker_color=["#F97316", "#0284C7"],
-        text=[f"{mail_rate:.1f}%", f"{electronic_rate:.1f}%"],
-        textposition="auto",
-    ))
-
-    comparison.update_layout(
-        title="Percentage of reports arriving late",
-        yaxis=dict(
-            title="Late reports (%)",
-            range=[0, 100],
-        ),
-        xaxis_title="Delivery method",
-        height=350,
-        showlegend=False,
-    )
-
-    st.plotly_chart(
-        comparison,
-        use_container_width=True,
-        key="simulation_comparison",
-    )
-
-    if abs(gap) < 0.000001:
-        st.info(
-            "Both groups have the same observed late-report rate. "
-            "These numbers show no difference between delivery methods."
-        )
-    elif gap > 0:
-        st.info(
-            f"The mail/fax late rate is {gap:.1f} percentage points higher. "
-            "This pattern is consistent with the suspected cause, "
-            "but does not establish it."
-        )
-    else:
-        st.info(
-            f"The electronic late rate is {abs(gap):.1f} percentage points higher. "
-            "These numbers show the opposite pattern to the suspected cause."
-        )
-
-    with st.expander("Show the calculations"):
-        st.write(
-            f"Mail/fax: {mail_late} ÷ {mail_total} × 100 "
-            f"= {mail_rate:.1f}%"
-        )
-        st.write(
-            f"Electronic: {electronic_late} ÷ {electronic_total} × 100 "
-            f"= {electronic_rate:.1f}%"
-        )
-        st.write(
-            f"Difference: {mail_rate:.1f}% − {electronic_rate:.1f}% "
-            f"= {gap:.1f} percentage points"
-        )
-
-    st.warning(
-        "Changing simulated numbers explores possible patterns. "
-        "Validating a real cause requires actual observations, "
-        "an appropriate statistical test, and checking other explanations."
-    )
-
-st.subheader("Try these challenges")
-st.write("• Make both groups have the same late-report percentage.")
-st.write("• Make electronic delivery have the higher late-report rate.")
-st.write(
-    "• Double both the total and late counts for one group. "
-    "Does its percentage change?"
+    st.info(f"The electronic late rate is {abs(gap):.1f} percentage points higher. This pattern is opposite to the suspected cause.")
+with st.expander("Show the calculations"):
+    st.write(f"Mail/fax: {mail_late} / {mail_total} x 100 = {mail_rate:.1f}%")
+    st.write(f"Electronic: {electronic_late} / {electronic_total} x 100 = {electronic_rate:.1f}%")
+    st.write(f"Difference: {mail_rate:.1f}% - {electronic_rate:.1f}% = {gap:.1f} percentage points")
+st.warning(
+    "These simulated patterns are not statistical verification. Real root-cause validation requires actual data, "
+    "an appropriate statistical test, and investigation of other explanations. Equal sample rates do not prove the methods are equivalent."
 )
+st.subheader("Try these challenges")
+st.write("- Make both groups have the same percentage despite different counts.")
+st.write("- Make electronic delivery have the higher late rate.")
+st.write("- Double both the reviewed and late counts for one group. Does its rate change?")
+st.caption("Progress and votes last for this session; this version does not save or aggregate classroom results.")
